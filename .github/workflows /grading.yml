@@ -1,0 +1,66 @@
+name: Auto Grading
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for pushing changes back to the repo
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4  # Updated to latest version
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas pytest
+
+      - name: Run Tests
+        id: run_tests
+        run: |
+            pytest --tb=short | tee report.txt
+            
+            # Extract number of collected tests safely
+            total_tests=$(grep -oP '(?<=collected )\d+' report.txt || echo "0")
+            passed_tests=$(grep -oP '(?<=\s)PASSED(?=\s)' report.txt | wc -l)
+
+            # Ensure values are numeric; default to 0 if empty
+            total_tests=${total_tests:-0}
+            passed_tests=${passed_tests:-0}
+
+            # Debugging output to confirm extracted values
+            echo "Extracted total_tests=$total_tests"
+            echo "Extracted passed_tests=$passed_tests"
+
+            # Calculate marks safely
+            if [ "$total_tests" -eq 0 ]; then
+                marks=0
+            else
+                marks=$(awk "BEGIN {printf \"%.2f\", ($passed_tests * 100) / $total_tests}")
+            fi
+
+            echo "Total Tests: $total_tests" >> report.txt
+            echo "Passed Tests: $passed_tests" >> report.txt
+            echo "Marks: $marks%" >> report.txt
+
+            echo "marks=$marks" >> $GITHUB_ENV  # Store marks as environment variable
+
+
+      - name: Commit Test Results
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          git add report.txt
+          git commit -m "Updated test results" || echo "No changes to commit"
+
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
