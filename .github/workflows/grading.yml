@@ -1,0 +1,8 @@
+name: Auto Grading
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Message
+        run: echo 'GitHub Actions Activated'
